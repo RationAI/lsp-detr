@@ -1,0 +1,52 @@
+defaults:
+  - hydra: default
+  - logger: mlflow
+  - _self_
+
+seed: ${random_seed:}
+mode: ???
+checkpoint: null
+
+trainer:
+  precision: 16-mixed
+  gradient_clip_val: 0.1
+  enable_checkpointing: true
+  check_val_every_n_epoch: 5
+  callbacks:
+    model_checkpoint:
+      _target_: lightning.pytorch.callbacks.ModelCheckpoint
+      save_top_k: 1
+      save_last: true
+      monitor: validation/bPQ
+      mode: max
+    finetune:
+      _target_: lightning.pytorch.callbacks.BackboneFinetuning
+      unfreeze_backbone_at_epoch: 30
+      backbone_initial_ratio_lr: 0.1
+
+data:
+  num_radial_distances: 64
+  eval_transforms:
+    - _target_: albumentations.Normalize
+
+model:
+  _target_: lsp_detr.det_meta_arch.DETMetaArch
+  warmup_epochs: 10
+  num_classes: ???
+  num_radial_distances: ${data.num_radial_distances}
+
+  criterion:
+    _target_: lsp_detr.modeling.SetCriterion
+    num_classes: ${..num_classes}
+    weight_dict:
+      loss_ce: 1.0
+      loss_centroids: 1.0
+      loss_radial_distances: 1.0
+    matcher:
+      _target_: lsp_detr.modeling.HungarianMatcher
+      cost_class: ${..weight_dict.loss_ce}
+      cost_point: ${..weight_dict.loss_centroids}
+      cost_radial_distances: ${..weight_dict.loss_radial_distances}
+
+metadata:
+  experiment_name: Nuclei Segmentation

@@ -1,0 +1,70 @@
+# @package _global_
+
+mode: [fit, test]
+checkpoint:
+  test: last
+
+trainer:
+  max_epochs: 130
+  log_every_n_steps: 20
+  limit_val_batches: 0
+  accumulate_grad_batches: 4
+  callbacks:
+    model_checkpoint:
+      every_n_epochs: 5
+    finetune:
+      unfreeze_backbone_at_epoch: 50
+    nuclei_polygon_mask:
+      _target_: lsp_detr.callbacks.TileMaskExport
+      output_dir: outputs
+      color_map:
+        0: [255, 0, 255]
+
+model:
+  num_classes: 1
+
+data:
+  _target_: lsp_detr.data.MoNuSeg
+  batch_size: 2
+  num_workers: 6
+  train_transforms:
+    - _target_: lsp_detr.data.transforms.RandomRotate90
+      p: 1.0
+    - _target_: lsp_detr.data.transforms.HorizontalFlip
+    - _target_: lsp_detr.data.transforms.VerticalFlip
+    - _target_: albumentations.Downscale
+      p: 0.15
+      scale_range: [0.5, 0.5]
+    - _target_: albumentations.Blur
+      p: 0.2
+      blur_limit: 11
+    - _target_: albumentations.GaussNoise
+      p: 0.25
+      std_range: [0, 0.44]
+    - _target_: albumentations.ColorJitter
+      p: 0.2
+      brightness: 0.25
+      contrast: 0.25
+      saturation: 0.1
+      hue: 0.05
+    # - _target_: albumentations.Superpixels
+    #   p: 0.1
+    #   p_replace: 0.1
+    #   n_segments: 200
+    #   max_size: 128
+    - _target_: albumentations.ZoomBlur
+      p: 0.1
+      max_factor: 1.05
+    # - _target_: lsp_detr.data.transforms.RandomSizedCrop
+    #   p: 0.1
+    #   min_max_height: [128, 256]
+    #   size: [256, 256]
+    - _target_: lsp_detr.data.transforms.ElasticTransform
+      p: 0.2
+      sigma: 25
+      alpha: 0.5
+    - _target_: albumentations.Normalize
+
+metadata:
+  run_name: 🏋️‍♂️ Training
+  description: Training on MoNuSeg

@@ -1,0 +1,6 @@
+_target_: rationai.mlkit.lightning.loggers.MLFlowLogger
+experiment_name: ${metadata.experiment_name}
+run_name: ${metadata.run_name}
+tags:
+  mlflow.user: ${oc.env:MLFLOW_TRACKING_USERNAME, ???}
+  mlflow.note.content: ${metadata.description}

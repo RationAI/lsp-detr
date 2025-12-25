@@ -1,0 +1,13 @@
+[package]
+name = "stardist"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "stardist"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = { version = "0.24.1", features = ["extension-module"] }
+numpy = "0.24.0"
+ndarray = { version = "0.16.1", features = ["rayon"] }
