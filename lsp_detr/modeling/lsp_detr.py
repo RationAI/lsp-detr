@@ -17,6 +17,7 @@ from transformers.modeling_utils import PreTrainedModel
 from lsp_detr.configuration import LSPDetrConfig, STAConfig
 from lsp_detr.modeling.layers import MLP, CayleySTRING, FeedForward
 
+
 flex_attention = torch.compile(flex_attention, dynamic=True)
 
 
@@ -393,7 +394,9 @@ class LSPDetrModel(PreTrainedModel):
         super().__init__(config)
         self.query_block_size = config.query_block_size
 
-        self.backbone = AutoBackbone.from_pretrained(config.backbone)
+        self.backbone = AutoBackbone.from_pretrained(
+            config.backbone, out_indices=config.backbone_out_indices
+        )
         _, *feature_channels, neck = self.backbone.num_features
 
         self.feature_sampling = FeatureSampling(neck, config.dim)
