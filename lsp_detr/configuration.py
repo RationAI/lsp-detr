@@ -1,7 +1,6 @@
-from typing import Any, TypedDict
+from typing import TypedDict
 
 from transformers import PretrainedConfig
-from transformers.utils.backbone_utils import verify_backbone_config_arguments
 
 
 class STAConfig(TypedDict):
@@ -18,8 +17,6 @@ class LSPDetrConfig(PretrainedConfig):
         use_timm_backbone: bool = False,
         use_pretrained_backbone: bool = True,
         backbone: str = "microsoft/swinv2-tiny-patch4-window16-256",
-        backbone_kwargs: dict[str, Any] | None = None,
-        backbone_config: Any | None = None,
         dim: int = 384,
         num_heads: int = 12,
         num_classes: int = 1,
@@ -37,22 +34,9 @@ class LSPDetrConfig(PretrainedConfig):
         if self_sta_config is None:
             self_sta_config = {"kernel": 3, "q_tile": 3, "kv_tile": 3}
 
-        if backbone_kwargs is None:
-            backbone_kwargs = {"out_features": ["stage1", "stage2", "stage3", "stage4"]}
-
-        verify_backbone_config_arguments(
-            use_timm_backbone=use_timm_backbone,
-            use_pretrained_backbone=use_pretrained_backbone,
-            backbone=backbone,
-            backbone_config=backbone_config,
-            backbone_kwargs=backbone_kwargs,
-        )
-
         self.use_timm_backbone = use_timm_backbone
         self.use_pretrained_backbone = use_pretrained_backbone
         self.backbone = backbone
-        self.backbone_config = backbone_config
-        self.backbone_kwargs = backbone_kwargs
         self.dim = dim
         self.num_heads = num_heads
         self.num_classes = num_classes
