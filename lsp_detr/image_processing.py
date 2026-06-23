@@ -3,10 +3,10 @@ import torch
 from PIL import Image, ImageDraw
 from scipy.ndimage import distance_transform_edt
 from torch import Tensor
-from transformers import BaseImageProcessorFast
+from transformers import BaseImageProcessor
 
 
-class LSPDetrImageProcessor(BaseImageProcessorFast):
+class LSPDetrImageProcessor(BaseImageProcessor):
     image_mean = (0.485, 0.456, 0.406)
     image_std = (0.229, 0.224, 0.225)
     do_rescale = True
