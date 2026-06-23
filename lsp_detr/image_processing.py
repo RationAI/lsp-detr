@@ -68,22 +68,11 @@ class LSPDetrImageProcessor(BaseImageProcessor):
                 masks[j] = torch.tensor(np.asarray(img))
 
             if not allow_overlap:
-                # Calculate area for each mask
-                areas = masks.sum(dim=(1, 2))
-                # Sort indices by area (largest first)
-                sorted_indices = torch.argsort(areas, descending=True)
-
-                # Create a composite mask to track occupied pixels
-                occupied = torch.zeros(
-                    (height, width), dtype=torch.bool, device=masks.device
-                )
-
-                # Process masks from largest to smallest
-                for idx in sorted_indices:
-                    # Remove pixels that are already occupied by larger nuclei
-                    masks[idx] = masks[idx] & ~occupied
-                    # Update occupied pixels
-                    occupied = occupied | masks[idx]
+                masks = self.resolve_nuclei_overlaps(masks)
+                non_zero = masks.sum((1, 2)) > 0
+                masks = masks[non_zero]
+                results[i]["polygons"] = results[i]["polygons"][non_zero]
+                results[i]["labels"] = results[i]["labels"][non_zero]
 
             results[i]["masks"] = masks
 
