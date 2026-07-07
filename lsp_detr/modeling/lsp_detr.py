@@ -307,7 +307,7 @@ class LSPTransformer(nn.Module):
 
         radial_distances = torch.full(
             (*tgt.shape[:3], self.num_radial_distances),
-            math.log(self.query_block_size / 2),
+            math.log1p(self.query_block_size / 2),
             dtype=torch.float32,
             device=tgt.device,
         )
@@ -395,7 +395,7 @@ class LSPDetrModel(PreTrainedModel):
         self.query_block_size = config.query_block_size
 
         self.backbone = AutoBackbone.from_pretrained(
-            config.backbone, out_indices=config.backbone_out_indices
+            config.backbone, out_features=config.backbone_out_features
         )
         _, *feature_channels, neck = self.backbone.num_features
 

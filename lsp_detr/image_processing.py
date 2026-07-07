@@ -20,7 +20,7 @@ class LSPDetrImageProcessor(BaseImageProcessor):
                 - "polygons": A tensor of shape (N, num_radial_distances, 2) representing the polygons.
                 - "labels": A tensor of shape (N,) representing the labels for each polygon.
         """
-        radial_distances = outputs["radial_distances"].exp()
+        radial_distances = outputs["radial_distances"].expm1()
 
         t = torch.linspace(
             0, 1, radial_distances.size(-1) + 1, device=radial_distances.device

@@ -17,7 +17,12 @@ class LSPDetrConfig(PretrainedConfig):
         use_timm_backbone: bool = False,
         use_pretrained_backbone: bool = True,
         backbone: str = "microsoft/swinv2-tiny-patch4-window16-256",
-        backbone_out_indices: tuple[int, ...] = (1, 2, 3, 4),
+        backbone_out_features: tuple[str, ...] = (
+            "stage1",
+            "stage2",
+            "stage3",
+            "stage4",
+        ),
         dim: int = 384,
         num_heads: int = 12,
         num_classes: int = 1,
@@ -38,7 +43,7 @@ class LSPDetrConfig(PretrainedConfig):
         self.use_timm_backbone = use_timm_backbone
         self.use_pretrained_backbone = use_pretrained_backbone
         self.backbone = backbone
-        self.backbone_out_indices = backbone_out_indices
+        self.backbone_out_features = backbone_out_features
         self.dim = dim
         self.num_heads = num_heads
         self.num_classes = num_classes

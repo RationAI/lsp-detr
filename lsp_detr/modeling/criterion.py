@@ -18,10 +18,10 @@ def l1_log_space_loss(
 ) -> Tensor:
     """Compute the L1 log-space loss for the radial distances."""
     # L1 minimum bound
-    loss_min = F.relu(tgt_min_bound.log() - outputs)
+    loss_min = F.relu(tgt_min_bound.log1p() - outputs)
 
     # L1 maximum bound
-    loss_max = F.relu(outputs - tgt_max_bound.log())
+    loss_max = F.relu(outputs - tgt_max_bound.log1p())
 
     loss = torch.max(loss_min, loss_max)
     return loss.nanmean()
