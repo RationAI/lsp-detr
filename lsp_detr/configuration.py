@@ -43,7 +43,7 @@ class LSPDetrConfig(PretrainedConfig):
         self.use_timm_backbone = use_timm_backbone
         self.use_pretrained_backbone = use_pretrained_backbone
         self.backbone = backbone
-        self.backbone_out_features = backbone_out_features
+        self.backbone_out_features = list(backbone_out_features)
         self.dim = dim
         self.num_heads = num_heads
         self.num_classes = num_classes
