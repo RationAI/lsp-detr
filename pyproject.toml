@@ -30,6 +30,8 @@ dependencies = [
 [dependency-groups]
 dev = ["mypy>=1.11.2", "ruff>=0.6.8"]
 
+[tool.uv]
+no-build-isolation-package = ["torch-linear-assignment"]
 
 [tool.uv.sources]
 stardist = { path = "lib/stardist" }
