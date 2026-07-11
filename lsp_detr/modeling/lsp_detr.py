@@ -157,8 +157,8 @@ class STAttention(nn.Module):
         )
 
         # RoPE
-        # q = self.pe(q, q_coords)
-        # k = self.pe(k, k_coords)
+        q = self.pe(q, q_coords)
+        k = self.pe(k, k_coords)
 
         # tile
         q, q_h, q_w = self.tile(q, h, self.q_tile)
