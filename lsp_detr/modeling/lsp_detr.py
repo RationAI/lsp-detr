@@ -157,8 +157,8 @@ class STAttention(nn.Module):
         )
 
         # RoPE
-        q = self.pe(q, q_coords)
-        k = self.pe(k, k_coords)
+        # q = self.pe(q, q_coords)
+        # k = self.pe(k, k_coords)
 
         # tile
         q, q_h, q_w = self.tile(q, h, self.q_tile)
@@ -166,16 +166,16 @@ class STAttention(nn.Module):
         v, _, _ = self.tile(v, src.shape[1], self.kv_tile)
 
         # flex attention
-        # block_mask = create_sta_block_mask(
-        #     q_len=q.shape[2],
-        #     kv_len=k.shape[2],
-        #     q_width=q_w,
-        #     kv_width=kv_w,
-        #     kernel=self.kernel,
-        #     q_tile=self.q_tile,
-        #     kv_tile=self.kv_tile,
-        # )
-        x = flex_attention(q, k, v)  # , block_mask=block_mask)
+        block_mask = create_sta_block_mask(
+            q_len=q.shape[2],
+            kv_len=k.shape[2],
+            q_width=q_w,
+            kv_width=kv_w,
+            kernel=self.kernel,
+            q_tile=self.q_tile,
+            kv_tile=self.kv_tile,
+        )
+        x = flex_attention(q, k, v, block_mask=block_mask)
 
         # un-tile
         x = rearrange(
