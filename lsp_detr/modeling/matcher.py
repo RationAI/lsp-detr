@@ -161,7 +161,7 @@ class HungarianMatcher(nn.Module):
             tgt_mask = target["masks"].to(out_prob)
 
             cost_class = self.compute_cost_labels(out_prob, target["labels"])
-            # cost_inner = self.compute_cost_inner(out_points, tgt_mask)
+            cost_inner = self.compute_cost_inner(out_points, tgt_mask)
             cost_point = torch.cdist(
                 out_points, target["centroids"].to(out_points), p=1
             )
@@ -175,7 +175,7 @@ class HungarianMatcher(nn.Module):
                 self.cost_class * cost_class
                 + self.cost_point * cost_point
                 + self.cost_radial_distances * cost_radial_distances
-                # + self.cost_inner * cost_inner
+                + self.cost_inner * cost_inner
             )
             indices.append(linear_assignment(cost_matrix))
 
