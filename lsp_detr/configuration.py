@@ -27,7 +27,7 @@ class LSPDetrConfig(PretrainedConfig):
         num_heads: int = 12,
         num_classes: int = 1,
         query_block_size: float = 14.222222222222223,  # 256 / 18
-        feature_levels: tuple[int, ...] = (2, 1, 0, 2, 1, 0, 2, 1, 0),
+        feature_levels: tuple[int, ...] = (2, 1, 0, 2, 1, 0),
         num_radial_distances: int = 64,
         self_sta_config: STAConfig | None = None,
         cross_sta_config: tuple[STAConfig, ...] = (
