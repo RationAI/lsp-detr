@@ -417,7 +417,7 @@ class LSPDetrModel(PreTrainedModel):
         )  # center positions
         tgt = self.feature_sampling(
             relative_to_absolute_pos(
-                ref_points, self.query_block_size, self.query_block_size
+                ref_points, self.query_block_size / w, self.query_block_size / h
             ),
             neck,
         )
