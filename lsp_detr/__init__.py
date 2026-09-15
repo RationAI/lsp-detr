@@ -1,2 +1,0 @@
-import openslide
-import pyvips

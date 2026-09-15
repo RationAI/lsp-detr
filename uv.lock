@@ -1047,7 +1047,7 @@ requires-dist = [
     { name = "scipy", specifier = ">=1.12.0" },
     { name = "stardist", directory = "lib/stardist" },
     { name = "timm", specifier = ">=1.0.7" },
-    { name = "torch", specifier = "==2.9.1" },
+    { name = "torch", specifier = ">=2.9.1" },
     { name = "torch-linear-assignment", specifier = ">=0.0.3" },
     { name = "torchmetrics", specifier = ">=1.3.0.post0" },
     { name = "torchvision", specifier = ">=0.16.2" },
