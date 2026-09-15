@@ -171,9 +171,7 @@ class DETMetaArch(LSPDetrModel, LightningModule):
         )
 
         results = self.processor.post_process(outputs)
-        results = self.processor.post_process_instance(
-            results, *inputs.shape[2:], allow_overlap=False
-        )
+        results = self.processor.post_process_instance(results, *inputs.shape[2:])
 
         for b, result in enumerate(results):
             self.val_metrics.update(

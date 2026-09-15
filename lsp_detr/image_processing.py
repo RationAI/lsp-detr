@@ -3,10 +3,10 @@ import torch
 from PIL import Image, ImageDraw
 from scipy.ndimage import distance_transform_edt
 from torch import Tensor
-from transformers import BaseImageProcessorFast
+from transformers import BaseImageProcessor
 
 
-class LSPDetrImageProcessor(BaseImageProcessorFast):
+class LSPDetrImageProcessor(BaseImageProcessor):
     image_mean = (0.485, 0.456, 0.406)
     image_std = (0.229, 0.224, 0.225)
     do_rescale = True
@@ -20,7 +20,7 @@ class LSPDetrImageProcessor(BaseImageProcessorFast):
                 - "polygons": A tensor of shape (N, num_radial_distances, 2) representing the polygons.
                 - "labels": A tensor of shape (N,) representing the labels for each polygon.
         """
-        radial_distances = outputs["radial_distances"].exp()
+        radial_distances = outputs["radial_distances"].expm1()
 
         t = torch.linspace(
             0, 1, radial_distances.size(-1) + 1, device=radial_distances.device
@@ -68,22 +68,11 @@ class LSPDetrImageProcessor(BaseImageProcessorFast):
                 masks[j] = torch.tensor(np.asarray(img))
 
             if not allow_overlap:
-                # Calculate area for each mask
-                areas = masks.sum(dim=(1, 2))
-                # Sort indices by area (largest first)
-                sorted_indices = torch.argsort(areas, descending=True)
-
-                # Create a composite mask to track occupied pixels
-                occupied = torch.zeros(
-                    (height, width), dtype=torch.bool, device=masks.device
-                )
-
-                # Process masks from largest to smallest
-                for idx in sorted_indices:
-                    # Remove pixels that are already occupied by larger nuclei
-                    masks[idx] = masks[idx] & ~occupied
-                    # Update occupied pixels
-                    occupied = occupied | masks[idx]
+                masks = self.resolve_nuclei_overlaps(masks)
+                non_zero = masks.sum((1, 2)) > 0
+                masks = masks[non_zero]
+                results[i]["polygons"] = results[i]["polygons"][non_zero]
+                results[i]["labels"] = results[i]["labels"][non_zero]
 
             results[i]["masks"] = masks
 

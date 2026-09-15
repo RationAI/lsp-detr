@@ -11,8 +11,8 @@ from torch.nn.attention.flex_attention import (
     create_block_mask,
     flex_attention,
 )
+from transformers import AutoBackbone
 from transformers.modeling_utils import PreTrainedModel
-from transformers.utils.backbone_utils import load_backbone
 
 from lsp_detr.configuration import LSPDetrConfig, STAConfig
 from lsp_detr.modeling.layers import MLP, CayleySTRING, FeedForward
@@ -307,7 +307,7 @@ class LSPTransformer(nn.Module):
 
         radial_distances = torch.full(
             (*tgt.shape[:3], self.num_radial_distances),
-            math.log(self.query_block_size / 2),
+            math.log1p(self.query_block_size / 2),
             dtype=torch.float32,
             device=tgt.device,
         )
@@ -394,7 +394,9 @@ class LSPDetrModel(PreTrainedModel):
         super().__init__(config)
         self.query_block_size = config.query_block_size
 
-        self.backbone = load_backbone(config)
+        self.backbone = AutoBackbone.from_pretrained(
+            config.backbone, out_features=config.backbone_out_features
+        )
         _, *feature_channels, neck = self.backbone.num_features
 
         self.feature_sampling = FeatureSampling(neck, config.dim)
