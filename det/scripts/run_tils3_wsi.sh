@@ -19,9 +19,21 @@ cd "${DET_DIR}"
 
 WSI_DIR=${WSI_DIR:-/mnt/14T-2/tksong/tils-e2e-wsi}
 RUN_DIR=${RUN_DIR:-"${DET_DIR}/output/tils3/[tils3]LSP-T_strict-local_x4_det-ft_80ep"}
-# deployed 3-class checkpoint: the training run's best_stg1 if this clone has it, else the NAS copy
-RESUME=${RESUME:-"${RUN_DIR}/best_stg1.pth"}
-[ -f "${RESUME}" ] || RESUME=/mnt/nas2/LSP-DETR/TILS3/best_stg1.pth
+# Checkpoint: the NAS model folder (TILS_MODELS, default /mnt/nas2/tksong/TILs-models - its README lists md5/metrics)
+#   MODEL_SET=r2       (default) HE-Patch-Extract 10-patch fine-tune, 2026-10-06, held-out 309 AP 0.737
+#   MODEL_SET=deployed the tils3 80-epoch run of 2026-08-25 (AP 0.709) = what r2 started from
+# Without the NAS, this clone's own training run (RUN_DIR) is used. RESUME= overrides everything.
+TILS_MODELS=${TILS_MODELS:-/mnt/nas2/tksong/TILs-models}
+MODEL_SET=${MODEL_SET:-r2}
+RESUME=${RESUME:-}
+if [ -z "${RESUME}" ]; then
+    case "${MODEL_SET}" in
+        r2|r2-10patch) RESUME="${TILS_MODELS}/lsp-detr-det/r2-10patch/best_stg1.pth" ;;
+        deployed)      RESUME="${TILS_MODELS}/lsp-detr-det/deployed/best_stg1.pth" ;;
+        *) echo "MODEL_SET must be r2 or deployed: ${MODEL_SET}" >&2; exit 1 ;;
+    esac
+    [ -f "${RESUME}" ] || RESUME="${RUN_DIR}/best_stg1.pth"
+fi
 CONFIG=${CONFIG:-configs/LSP-T-tils3.yml}
 OUTPUT_DIR=${OUTPUT_DIR:-"${DET_DIR}/../results/tils3-wsi"}
 TAG=${TAG:-LSPDETR-TNTL}

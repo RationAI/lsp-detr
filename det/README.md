@@ -70,8 +70,9 @@ OUTPUT_ROOT=/big/disk/lsp_detr DRY_RUN=1 bash det/scripts/dist_train_lsp.sh
 ## 3-class arm (LSP-DETR-DET: non_tumor / tumor / Lymphocyte)
 The deployed TILs model is the 3-class fine-tune described in `TILS3_FINETUNE.md` (val macro-F1 0.795):
 ```bash
-# weights: /mnt/nas2/LSP-DETR/TILS3/best_stg1.pth (716 MB) - run_tils3_wsi.sh falls back to it when
-#          det/output/tils3/.../best_stg1.pth is absent; RESUME= overrides
+# weights: NAS /mnt/nas2/tksong/TILs-models/lsp-detr-det/{r2-10patch,deployed}/best_stg1.pth (716 MB each);
+#          run_tils3_wsi.sh picks MODEL_SET=r2 (default: the HE-Patch-Extract 10-patch fine-tune, AP 0.737) or
+#          MODEL_SET=deployed (the 80-ep tils3 run, AP 0.709); falls back to det/output/tils3/... without the NAS; RESUME= overrides
 WSI_DIR=/data/slides OUTPUT_DIR=results/tils3-wsi GPUS=0,1 bash det/scripts/run_tils3_wsi.sh      # all slides in WSI_DIR
 ZST_CONVENTION=tnt-lymph-nt1   # default: categoryId '1' non_tumor / '2' tumor / '3' Lymphocyte, termIds + nt per class
 # training data: TILs-images labels -> det/data/tils3 (git-excluded) via det/scripts/build_tils3_dataset.py,
