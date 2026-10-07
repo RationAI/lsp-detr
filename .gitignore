@@ -194,3 +194,9 @@ hf-5class/*.pth
 hf-5class/.gitattributes
 # GPU-Hungarian benchmark artefacts (1.4 GB: captured cost matrices, wheels, results) - see POST_TRAINING_TODO.md §7
 det/.gpu_lap/
+
+# ---- LSP-DETR-det 3-class (TILs-images) fine-tune artefacts (det/TILS3_FINETUNE.md)
+# 2-class source checkpoints (1.7 GB); canonical copies: /mnt/nas2/LSP-DETR/TNT/best_stg1.pth
+/ckpt/
+# the built tils3 bundle (39 MB of val tiles + COCO json) - regenerate with det/scripts/build_tils3_dataset.py
+det/data/

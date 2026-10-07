@@ -25,8 +25,9 @@ consumers recover the slide name by stripping the whole suffix they were told to
 hyphenated one-underscore tag is safe. ``--output-name`` overrides the base name wholesale):
   * ``<name>.zst``       MVT layer "default", extent = level-0 slide height, one Point per
                          detection at the bbox centre, stored y-flipped (y_mvt = h_wsi - y_img).
-                         Viewer convention: tumour  categoryId "1" / termId 66d54cd7... / nt=False,
-                         non-tumour categoryId "5" / termId 67bc099c... / nt=True.
+                         Viewer convention picked by --zst-convention (default: by num_classes) -
+                         see ZST_CONVENTIONS: 'tnt' (2-class) tumour 1 / non-tumour 5;
+                         'tnt-lymph' (3-class) tumour 1 / non-tumour 2 / lymphocyte 3.
   * ``<name>.json``      COCO predictions in level-0 pixels (``--no-json`` to skip)
   * ``<name>.meta.json`` run metadata (model, geometry, mpp, per-class counts, timings)
 
@@ -53,17 +54,60 @@ DET_ROOT = os.path.dirname(os.path.abspath(__file__))
 
 # Philips .isyntax/.i2syntax: OpenSlide cannot open these at all, so they are read through the
 # pixel-engine wrapper vendored in TILs-Inference (utils.read_isyntax + philips_pixel_engine).
-# $TILS_ROOT relocates that checkout; TILs-Inference/env.sh puts the same two directories on
-# PYTHONPATH, so a caller that already sourced it needs nothing here.
+# $TILS_ROOT relocates that checkout (default: a sibling clone of AIVIS-inc/TILs-Inference next to
+# this repo); TILs-Inference/env.sh puts the same two directories on PYTHONPATH, so a caller that
+# already sourced it needs nothing here. Only .isyntax/.i2syntax input touches it.
 ISYNTAX_EXT = (".isyntax", ".i2syntax")
-TILS_ROOT = os.environ.get("TILS_ROOT", "/workspace/TILs-Inference")
+TILS_ROOT = os.environ.get("TILS_ROOT") or os.path.abspath(os.path.join(DET_ROOT, "..", "..", "TILs-Inference"))
 if DET_ROOT not in sys.path:
     sys.path.insert(0, DET_ROOT)
 
-CLASS_NAMES = ["Non-tumor", "Tumor"]          # combined_all_v1_bundle categories (id 0 / 1)
-# Viewer convention for the tumour/non-tumour arm, cf. lsp-detr/wsi/normalize_domedetr_zst.py
-TUMOUR = ("1", "66d54cd789181badfeac2d69")
-NON_TUMOUR = ("5", "67bc099c32a0394aeaccc959")
+# Viewer conventions: model label id -> (categoryId, termId, nt, name). `nt` is the viewer's
+# "non-tumour" flag, i.e. everything that is not the tumour class (so the T/NT display mode still
+# reads a lymphocyte as non-tumour).
+#   'tnt'        the 2-class tumour/non-tumour arm, cf. lsp-detr/wsi/normalize_domedetr_zst.py
+#   'tnt-lymph'  the platform's 3-class encoding - identical to what det/combine_tnt_lymph.py writes
+#                and to the KongNet reference file SSMH_BRS_HE_106.i2syntax_KongNet.zst
+#                (verified by decoding it: categoryId 1/2/3 with these termIds, plus imageId and
+#                positivity_rank, which write_zst already emits).
+#                NOTE this remaps non-tumour from the 'tnt' arm's 5 / 67bc099c... to 2 / 66d54d2a...
+ZST_CONVENTIONS = {
+    "tnt": [("5", "67bc099c32a0394aeaccc959", True,  "Non-tumor"),
+            ("1", "66d54cd789181badfeac2d69", False, "Tumor")],
+    "tnt-lymph": [("2", "66d54d2a89181badfeac2d75", True,  "non_tumor"),
+                  ("1", "66d54cd789181badfeac2d69", False, "tumor"),
+                  ("3", "66d54cee89181badfeac2d6d", True,  "Lymphocyte")],
+    # 'tnt-lymph-nt1' is 'tnt-lymph' with the tumour/non-tumour *numbers* swapped, on request
+    # (2026-08-27). Each class keeps its own termId and nt flag - only which number carries which
+    # term changes - so a consumer that resolves classes by termId sees no difference, while one
+    # that reads categoryId sees non-tumour at 1 and tumour at 2. Note every other .zst on this box
+    # (Dome, KongNet, LSPDETR, AD1) puts tumour at 1, so do not mix the two in one viewer session.
+    "tnt-lymph-nt1": [("1", "66d54d2a89181badfeac2d75", True,  "non_tumor"),
+                      ("2", "66d54cd789181badfeac2d69", False, "tumor"),
+                      ("3", "66d54cee89181badfeac2d6d", True,  "Lymphocyte")],
+}
+# num_classes -> convention used when --zst-convention is 'auto'
+AUTO_CONVENTION = {2: "tnt", 3: "tnt-lymph"}
+
+
+def resolve_convention(name: str, num_classes: int, class_names=None):
+    """(convention_name, [(categoryId, termId, nt, name)] indexed by model label)."""
+    if name == "auto":
+        if num_classes not in AUTO_CONVENTION:
+            raise SystemExit(f"no default .zst convention for num_classes={num_classes}; "
+                             f"pass --zst-convention {'|'.join(ZST_CONVENTIONS)}")
+        name = AUTO_CONVENTION[num_classes]
+    if name not in ZST_CONVENTIONS:
+        raise SystemExit(f"unknown --zst-convention {name!r} (have {sorted(ZST_CONVENTIONS)})")
+    table = list(ZST_CONVENTIONS[name])
+    if len(table) != num_classes:
+        raise SystemExit(f"--zst-convention {name!r} encodes {len(table)} classes but the model has "
+                         f"{num_classes}; the label ids would be mis-mapped")
+    if class_names:
+        if len(class_names) != num_classes:
+            raise SystemExit(f"--class-names has {len(class_names)} entries for {num_classes} classes")
+        table = [(c, t, nt, n) for (c, t, nt, _), n in zip(table, class_names)]
+    return name, table
 # The Dome-DETR tumour/non-tumour arm is run at 0.5 mpp (integrated_wsi_infer.py --target-mpp).
 TARGET_MPP = 0.5
 
@@ -415,8 +459,8 @@ def run_shard(args, geo: dict, tiles: np.ndarray) -> Tuple[np.ndarray, dict]:
 
 
 # --------------------------------------------------------------------------------------- outputs
-def write_zst(det: np.ndarray, slide: Slide, path: str, verify: bool = True) -> None:
-    """MVT layer "default" + zstd, in the viewer's tumour/non-tumour frame.
+def write_zst(det: np.ndarray, slide: Slide, path: str, table, verify: bool = True) -> None:
+    """MVT layer "default" + zstd, in the viewer's frame; ``table`` is a resolve_convention() table.
 
     extent = level-0 slide height, and the value *stored in the tile* for a detection whose bbox
     centre is (cx, cy) in image pixels is ``(cx, h_wsi - cy)`` - the convention of every writer on
@@ -441,15 +485,18 @@ def write_zst(det: np.ndarray, slide: Slide, path: str, verify: bool = True) -> 
     cy = (det["y1"].astype(np.float64) + det["y2"]) * 0.5
     extent = int(math.ceil(slide.height))
     mvt_y = float(slide.height) - cy                      # what must end up stored in the tile
-    is_tumour = det["label"] == 1
+    labels = det["label"].astype(np.int64)
+    if len(labels) and (labels.min() < 0 or labels.max() >= len(table)):
+        raise RuntimeError(f"[zst] label {labels.min()}..{labels.max()} outside the "
+                           f"{len(table)}-class convention table")
 
     features = []
     for i in range(len(det)):
-        cid, term = TUMOUR if is_tumour[i] else NON_TUMOUR
+        cid, term, nt, _ = table[labels[i]]
         features.append({
             "geometry": {"type": "Point", "coordinates": [float(cx[i]), float(mvt_y[i])]},
             "properties": {"imageId": 0, "categoryId": cid, "termId": term,
-                           "nt": not bool(is_tumour[i]), "positivity_rank": 0},
+                           "nt": bool(nt), "positivity_rank": 0},
             "id": int(i),
         })
     blob = mvt.encode({"name": "default", "features": features},
@@ -460,10 +507,10 @@ def write_zst(det: np.ndarray, slide: Slide, path: str, verify: bool = True) -> 
         fp.write(packed)
     print(f"[zst] {path} ({len(packed) / 2**20:.1f} MB, {len(det):,} features, extent={extent})", flush=True)
     if verify and len(det):
-        verify_zst(path, cx, cy)
+        verify_zst(path, cx, cy, labels, table)
 
 
-def verify_zst(path: str, cx: np.ndarray, cy: np.ndarray, sample: int = 2000) -> None:
+def verify_zst(path: str, cx: np.ndarray, cy: np.ndarray, labels, table, sample: int = 2000) -> None:
     """Decode the file we just wrote and assert it comes back in image space (catches a y flip)."""
     import mapbox_vector_tile as mvt
     import zstandard as zstd
@@ -480,15 +527,30 @@ def verify_zst(path: str, cx: np.ndarray, cy: np.ndarray, sample: int = 2000) ->
                          - (layer["extent"] - cy[idx])).max() <= 1.5
         raise RuntimeError(f"[zst] verify FAILED: max |dx|={np.abs(dx).max():.1f} max |dy|={np.abs(dy).max():.1f}"
                            + (" - the y axis is flipped" if flipped else ""))
-    print(f"[zst] verify: {len(idx)} sampled features decode back to image coordinates "
-          f"(max |dx|={np.abs(dx).max():.2f}, max |dy|={np.abs(dy).max():.2f})", flush=True)
+    # geometry is sound; now check the class encoding round-trips (a mis-mapped label would render
+    # the right dots in the wrong colour, which no coordinate check can catch).
+    def _wrong(i):
+        p, t = feats[i]["properties"], table[int(labels[i])]
+        return (p.get("categoryId") != t[0] or p.get("termId") != t[1]
+                or bool(p.get("nt")) != bool(t[2]))
+    bad_cls = [i for i in idx if _wrong(i)]
+    if bad_cls:
+        i = bad_cls[0]
+        raise RuntimeError(f"[zst] verify: {len(bad_cls)} sampled features carry the wrong "
+                           f"categoryId/termId/nt for their label - e.g. feature {i} has "
+                           f"{feats[i]['properties'].get('categoryId')!r}/"
+                           f"{feats[i]['properties'].get('termId')!r}/{feats[i]['properties'].get('nt')!r} "
+                           f"but label {int(labels[i])} maps to {table[int(labels[i])][:3]}")
+    print(f"[zst] verify: {len(idx)} sampled features decode back to image coordinates and carry the "
+          f"convention's categoryId/termId/nt (max |dx|={np.abs(dx).max():.2f}, "
+          f"max |dy|={np.abs(dy).max():.2f})", flush=True)
 
 
-def write_json(det: np.ndarray, slide: Slide, path: str) -> None:
+def write_json(det: np.ndarray, slide: Slide, path: str, class_names) -> None:
     """COCO predictions in level-0 pixels, streamed (millions of dicts would cost several GB)."""
     head = {"images": [{"id": 0, "file_name": slide.name, "width": int(slide.width),
                         "height": int(slide.height), "mpp": slide.mpp}],
-            "categories": [{"id": i, "name": n} for i, n in enumerate(CLASS_NAMES)]}
+            "categories": [{"id": i, "name": n} for i, n in enumerate(class_names)]}
     x = np.rint(det["x1"]).astype(np.int64)
     y = np.rint(det["y1"]).astype(np.int64)
     w = np.maximum(1, np.rint(det["x2"] - det["x1"])).astype(np.int64)
@@ -539,7 +601,13 @@ def parse_args(argv=None):
     p.add_argument("--num-top-queries", type=int, default=None)
     p.add_argument("--use-nms", type=_bool, default=None)
     p.add_argument("--class-agnostic-nms", type=_bool, default=None)
-    p.add_argument("--include-non-tumor", type=_bool, default=True)
+    p.add_argument("--include-non-tumor", type=_bool, default=True,
+                   help="False -> drop label 0 (the non-tumour class in every convention)")
+    p.add_argument("--zst-convention", default="auto", choices=["auto"] + sorted(ZST_CONVENTIONS),
+                   help="viewer categoryId/termId/nt encoding; 'auto' picks by the model's num_classes "
+                        "(2 -> tnt, 3 -> tnt-lymph)")
+    p.add_argument("--class-names", default=None,
+                   help="comma separated, overrides the convention's names in the .json/.meta.json")
     p.add_argument("--seg-downsample", type=int, default=32, help="downsample of the tissue mask")
     p.add_argument("--sat-min", type=int, default=8, help="minimum HSV saturation for tissue")
     p.add_argument("--max-tiles", type=int, default=0, help="cap the tile count (smoke tests)")
@@ -637,7 +705,8 @@ def main(argv=None) -> int:
                    "--include-non-tumor", str(args.include_non_tumor), "--batch-size", str(args.batch_size),
                    "--reader-threads", str(args.reader_threads), "--prefetch", str(args.prefetch),
                    "--amp", args.amp, "--tf32", args.tf32, "--log-every", str(args.log_every),
-                   "--device", args.device, "--target-mpp", str(args.target_mpp)]
+                   "--device", args.device, "--target-mpp", str(args.target_mpp),
+                   "--zst-convention", args.zst_convention]
     for flag, val in (("--source-mpp", args.source_mpp), ("--nms-iou-threshold", args.nms_iou_threshold),
                       ("--nms-score-threshold", args.nms_score_threshold),
                       ("--num-top-queries", args.num_top_queries), ("--use-nms", args.use_nms),
@@ -684,13 +753,22 @@ def main(argv=None) -> int:
     order = np.lexsort((det["x1"], det["y1"]))     # stable, shard-independent ordering
     det = det[order]
 
-    counts = {CLASS_NAMES[c]: int((det["label"] == c).sum()) for c in range(len(CLASS_NAMES))}
+    # the parent never builds a model, so num_classes comes back from the shard's model meta
+    num_classes = int((model_meta or {}).get("num_classes", 2))
+    conv_name, table = resolve_convention(
+        args.zst_convention, num_classes,
+        [c.strip() for c in args.class_names.split(",")] if args.class_names else None)
+    class_names = [t[3] for t in table]
+    print(f"[classes] num_classes={num_classes} convention={conv_name}  " +
+          "  ".join(f"{i}:{t[3]}=cat{t[0]}/nt{int(t[2])}" for i, t in enumerate(table)), flush=True)
+
+    counts = {class_names[c]: int((det["label"] == c).sum()) for c in range(num_classes)}
     print(f"[detect] {len(det):,} detections  " + "  ".join(f"{k}={v:,}" for k, v in counts.items()), flush=True)
 
     base = os.path.join(args.output_dir, name)
-    write_zst(det, slide, base + ".zst")
+    write_zst(det, slide, base + ".zst", table)
     if args.save_json:
-        write_json(det, slide, base + ".json")
+        write_json(det, slide, base + ".json", class_names)
     meta = {"date": time.strftime("%Y-%m-%dT%H:%M:%S"), "wsi": slide.path, "slide": slide.name,
             "width": int(slide.width), "height": int(slide.height), "mpp": slide.mpp,
             "mpp_source": slide.mpp_source, "bounds_offset": [slide.off_x, slide.off_y],
@@ -701,8 +779,10 @@ def main(argv=None) -> int:
             "elapsed_sec": round(time.time() - t_start, 1), "cli": " ".join(sys.argv),
             "zst": {"format": "zstd(mapbox_vector_tile)", "layer": "default",
                     "extent": int(math.ceil(slide.height)),
-                    "convention": "tumour: categoryId 1 / nt False; non-tumour: categoryId 5 / nt True; "
-                                  "stored_y = height - centre_y (decodes back to image-space y)"},
+                    "convention": conv_name,
+                    "classes": [{"label": i, "name": t[3], "categoryId": t[0], "termId": t[1], "nt": bool(t[2])}
+                                for i, t in enumerate(table)],
+                    "geometry_note": "stored_y = height - centre_y (decodes back to image-space y)"},
             "output_name": name}
     with open(base + ".meta.json", "w") as f:
         json.dump(meta, f, indent=2)

@@ -45,6 +45,7 @@ bootstrap_dome()
 
 # register the LSP arm components (order: transforms first, they only depend on src.data)
 from . import transforms as transforms  # noqa: E402,F401
+from . import grid_subset_wrapper as grid_subset_wrapper  # noqa: E402,F401
 from . import lsp_trunk as lsp_trunk  # noqa: E402,F401
 from . import checkpoint as checkpoint  # noqa: E402,F401
 from . import lsp_detr_det as lsp_detr_det  # noqa: E402,F401

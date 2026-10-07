@@ -1,0 +1,97 @@
+# LSP-DETR-T detection arm: 2-class (Non-tumor/Tumor) -> 3-class (non_tumor/tumor/Lymphocyte)
+# fine-tune on the two annotated TILs-images patches.
+#
+# Same include chain and same recipe as configs/LSP-T-combined.yml, with four deliberate changes:
+#   1. dataset  -> ./dataset/tils3_detection.yml (num_classes 3, grid-restricted crops, 8 fixed val tiles)
+#   2. weights  -> `LSPDetrDetection.pretrained: null`; the trained detector is loaded through
+#      `train.py --tuning ckpt/checkpoint0022_3class.pth` (det/scripts/expand_class_head.py grew the
+#      shared `decoder.class_head` from 2 to 3 rows: rows 0/1 keep their trained meaning, row 2
+#      starts at the focal prior). --tuning loads the EMA weights *before* the new EMA is built.
+#   3. LR       -> 5x lower than the from-scratch-head recipe (base 5e-5, backbone 2.5e-6) with a
+#      100-step linear warmup: the trunk is already converged and the dataset is two images.
+#   4. schedule -> MultiStepLR [55, 70] gamma 0.5 over 80 epochs (~24 steps/epoch at total batch 4).
+__include__: [
+  './dataset/tils3_detection.yml',
+  '../../../AIVIS-DETECTION/AIVIS-Dome-DETR/configs/runtime.yml',
+  '../../../AIVIS-DETECTION/AIVIS-Dome-DETR/configs/dome/include/dataloader.yml',
+  '../../../AIVIS-DETECTION/AIVIS-Dome-DETR/configs/dome/include/optimizer.yml',
+  './include/lsp_swinv2.yml',
+]
+
+output_dir: ./output/LSP-T-tils3
+
+checkpoint_freq: 10
+
+num_visualization_batches_per_gpu: 1
+num_visualization_samples_per_batch: null
+visualization_epoch_interval: 20
+visualization_save_rank0_only: false
+num_visualization_sample_batch: 1
+
+eval_spatial_size: [1536, 1536] # h w
+
+# weights come from --tuning (the trained 2-class detector), not from the hf-5class snapshot
+LSPDetrDetection:
+  pretrained: null
+
+# ---- transforms: identical to LSP-T-combined.yml (YAML lists do not merge, so restate in full)
+train_dataloader:
+  dataset:
+    dataset:
+      transforms:
+        type: Compose
+        ops:
+          - {type: RandomCropWithGridNoDummy, crop_size: 1536, center_gt_size: 672}
+          - {type: ColorJitter, brightness: 0.1, contrast: 0.1, saturation: 0.1, hue: 0.05}
+          - {type: RandomHorizontalFlip, p: 0.5}
+          - {type: RandomVerticalFlip, p: 0.5}
+          - {type: SanitizeBoundingBoxes, min_size: 2}
+          - {type: ConvertPILImage, dtype: 'float32', scale: True}
+          - {type: ConvertBoxes, fmt: 'cxcywh', normalize: True}
+          - {type: RandomGaussianBlur, p: 0.25, kernel_size: [3, 5], sigma: [0.1, 1.0]}
+          - {type: ImageNetNormalize}
+
+val_dataloader:
+  dataset:
+    transforms:
+      ops:
+        - {type: Resize, size: [1536, 1536], }
+        - {type: ConvertPILImage, dtype: 'float32', scale: True}
+        - {type: ImageNetNormalize}
+
+DomePostProcessor:
+  num_top_queries: 2000
+  use_nms: true
+  nms_iou_threshold: 0.7
+  nms_score_threshold: 0.01
+  class_agnostic: true
+  keep_topk_after_nms: null
+
+# ---- optimizer: the same 3 mutually exclusive regex groups as LSP-T-combined.yml, LRs / 5.
+#   [0] backbone, non-norm      lr 2.5e-6, wd 1.25e-4
+#   [1] backbone, norm          lr 2.5e-6, wd 0
+#   [2] non-backbone norm       lr 5e-5,   wd 0
+#   [3] default (rest)          lr 5e-5,   wd 1.25e-4
+optimizer:
+  type: AdamW
+  params:
+    - params: '^(?=.*backbone)(?!.*norm|bn).*$'
+      lr: 2.5e-06
+    - params: '^(?=.*backbone)(?=.*norm).*$'
+      lr: 2.5e-06
+      weight_decay: 0.0
+    - params: '^(?!.*backbone)(?=.*norm).*$'
+      weight_decay: 0.0
+  lr: 0.00005
+  betas: [0.9, 0.999]
+  weight_decay: 0.000125
+
+lr_scheduler:
+  type: MultiStepLR
+  milestones: [55, 70]
+  gamma: 0.5
+
+epochs: 80   # dead key kept for parity with LSP-T-combined.yml (the solver reads `epoches`)
+
+lr_warmup_scheduler:
+  warmup_duration: 100

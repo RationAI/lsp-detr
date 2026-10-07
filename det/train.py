@@ -45,7 +45,8 @@ def main(args) -> None:
     assert not all([args.tuning, args.resume]), "Only support from_scrach or resume or tuning at one time"
 
     update_dict = yaml_utils.parse_cli(args.update)
-    update_dict.update({k: v for k, v in args.__dict__.items() if k not in ["update", "skip_optim_audit", "tf32"] and v is not None})
+    update_dict.update({k: v for k, v in args.__dict__.items()
+                        if k not in ["update", "skip_optim_audit", "tf32", "expect_backbone_lr"] and v is not None})
 
     if lsp_det.CRITERION_IMPORT_ERROR is not None:
         raise ImportError("LSPCriterion is unavailable, so training cannot run: "
@@ -57,7 +58,7 @@ def main(args) -> None:
     if not args.skip_optim_audit and "optimizer" in cfg.yaml_cfg:
         # builds cfg.model (cached; the solver reuses the same object) and checks the regex groups
         lsp_det.optim_audit.audit_param_groups(cfg.model, cfg.yaml_cfg["optimizer"],
-                                               expect={"backbone_lr": 1.25e-5, "min_groups": 3}, verbose=True)
+                                               expect={"backbone_lr": args.expect_backbone_lr, "min_groups": 3}, verbose=True)
         rep = getattr(cfg.model, "pretrained_report", None)
         if rep is not None:
             print(f"[hf5class] init: arm={rep['arm']} loaded_tensors={rep['loaded_tensors']} loaded_params={rep['loaded_params']:,} "
@@ -103,6 +104,8 @@ if __name__ == "__main__":
     parser.add_argument("--print-rank", type=int, default=0, help="print rank id")
     parser.add_argument("--local-rank", type=int, help="local rank id")
     parser.add_argument("--skip-optim-audit", action="store_true", default=False)
+    parser.add_argument("--expect-backbone-lr", type=float, default=1.25e-5,
+                        help="LR the optimizer audit expects on the backbone groups (LSP-T-combined recipe: 1.25e-5)")
     parser.add_argument("--tf32", type=str, default="keep", choices=["keep", "off", "on"], help="TF32 policy (see _apply_tf32_policy)")
     args = parser.parse_args()
     main(args)

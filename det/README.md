@@ -33,6 +33,7 @@ det/
 ├── tests/    pytest unit tests (Cayley stale-P, criterion empty batches, transforms)
 ├── logs/     smoke outputs (p*_*.log/json), smoke_data/ (24+16-image COCO subsets of the TNT val split)
 ├── reports/  training-run records (260827-p4-strict-local-30ep: per-epoch tables, figures, standalone HTML)
+├── TILS3_FINETUNE.md     2-class -> 3-class (non_tumor / tumor / Lymphocyte) fine-tune on TILs-images, WSI inference, .zst encodings
 ├── HYPERPARAMS.md        every hyper-parameter of the P4 strict-local run as actually applied (+ diffs vs Dome-M)
 ├── POST_TRAINING_TODO.md work queued for after the P4 run ends (review follow-ups, resume guards, eval, P5 prep)
 └── IMPLEMENTATION_LOG.md
@@ -65,6 +66,20 @@ OUTPUT_ROOT=/big/disk/lsp_detr DRY_RUN=1 bash det/scripts/dist_train_lsp.sh
   `TRAIN_IMG_DIR/TRAIN_ANN/VAL_IMG_DIR/VAL_ANN` or `-u` updates.
 * Disk: 716 MB per checkpoint and `checkpoint_freq: 1`, i.e. ~23 GB for 30 epochs. `OUTPUT_ROOT` defaults to the
   training box's NFS directory when it exists, else `det/output`.
+
+## 3-class arm (LSP-DETR-DET: non_tumor / tumor / Lymphocyte)
+The deployed TILs model is the 3-class fine-tune described in `TILS3_FINETUNE.md` (val macro-F1 0.795):
+```bash
+# weights: /mnt/nas2/LSP-DETR/TILS3/best_stg1.pth (716 MB) - run_tils3_wsi.sh falls back to it when
+#          det/output/tils3/.../best_stg1.pth is absent; RESUME= overrides
+WSI_DIR=/data/slides OUTPUT_DIR=results/tils3-wsi GPUS=0,1 bash det/scripts/run_tils3_wsi.sh      # all slides in WSI_DIR
+ZST_CONVENTION=tnt-lymph-nt1   # default: categoryId '1' non_tumor / '2' tumor / '3' Lymphocyte, termIds + nt per class
+# training data: TILs-images labels -> det/data/tils3 (git-excluded) via det/scripts/build_tils3_dataset.py,
+#   then bash det/scripts/dist_train_tils3.sh (TUNING = the 2-class checkpoint grown to 3 classes by expand_class_head.py)
+```
+`.i2syntax` slides need a sibling clone of `AIVIS-inc/TILs-Inference` (Philips reader) or `TILS_ROOT=/path/to/it`.
+`configs/LSP-T-iter-r{1,2}.yml` + `configs/dataset/iter_r{1,2}_detection.yml` are the generated configs of the
+SSMH-BRS-456 iterative rounds (ensemble-exp) and carry that box's absolute data paths - records, not templates.
 
 ## Environment (training box)
 * conda env `dome`: `/home/work/miniconda3/envs/dome/bin/python` (py3.11, torch 2.13.0+cu130, torchvision 0.28, transformers 5.13.0);

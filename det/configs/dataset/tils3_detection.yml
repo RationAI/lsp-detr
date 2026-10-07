@@ -1,0 +1,60 @@
+# TILs-images 3-class detection bundle (0=non_tumor, 1=tumor, 2=Lymphocyte).
+# Built by det/scripts/build_tils3_dataset.py from the two per-patch label files in
+# /workspace/TILs-images (`*_ki67.json`); `3 Exclusions` and `4 Others_unmatched` are dropped.
+# Paths: the bundle lives in det/data/tils3 (git-excluded, regenerate with the script) and is referenced
+# relative to det/ - the launchers cd there. The patch PNGs are an external input (img_folder below);
+# override per launch with EXTRA_UPDATES="train_dataloader.dataset.dataset.img_folder=/path/to/images".
+#
+# Train: the two full 4096x4096 patches. `GridSubsetCropWrapper` (det/lsp_det/grid_subset_wrapper.py)
+# replaces Dome's MultiCropDatasetWrapper so the 1536 crops are drawn only from the 16 whitelisted
+# centre cells per image (`allowed_grids.json`) - the 4 val cells and their edge neighbours are
+# excluded, which keeps train/val GT disjoint and any train<->val pixel overlap at <= 31.6 %.
+# Val:   8 fixed 1536x1536 tiles cut from those 4 cells per image, GT = the centre-672 window only
+#        (the same convention as the combined_all_v1_bundle val split, so `Resize [1536,1536]` is a no-op).
+task: detection
+
+evaluator:
+  type: AitodCocoEvaluator
+  iou_types: ['bbox', ]
+
+num_classes: 3
+remap_mscoco_category: False
+
+train_dataloader:
+  type: DataLoader
+  dataset:
+    type: GridSubsetCropWrapper
+    crops_per_image: 48          # 3 x the 16 whitelisted cells -> every allowed cell 3x per epoch
+    allowed_grids: data/tils3/allowed_grids.json
+    strategy: cycle              # deterministic sweep of the whitelist; augmentation supplies the variety
+    dataset:
+      type: CocoDetection
+      img_folder: /workspace/TILs-images/images
+      ann_file: data/tils3/train_coco.json
+      return_masks: False
+      transforms:
+        type: Compose
+        ops: ~
+
+  shuffle: True
+  num_workers: 4
+  drop_last: True
+  persistent_workers: True
+  collate_fn:
+    type: BatchImageCollateFunction
+
+val_dataloader:
+  type: DataLoader
+  dataset:
+    type: CocoDetection
+    img_folder: data/tils3/val_tiles
+    ann_file: data/tils3/val_coco.json
+    return_masks: False
+    transforms:
+      type: Compose
+      ops: ~
+  shuffle: False
+  num_workers: 2
+  drop_last: False
+  collate_fn:
+    type: BatchImageCollateFunction
