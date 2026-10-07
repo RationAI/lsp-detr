@@ -49,4 +49,4 @@ model:
       cost_radial_distances: ${..weight_dict.loss_radial_distances}
 
 metadata:
-  experiment_name: Nuclei Segmentation
+  experiment_name: LSP-DETR

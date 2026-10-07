@@ -27,7 +27,7 @@ class PanNuke(LightningDataModule):
         num_workers: int = 0,
         train_transforms: TransformsSeqType | None = None,
         eval_transforms: TransformsSeqType | None = None,
-        allow_overlaps: bool = False,
+        allow_overlaps: bool = True,
     ) -> None:
         super().__init__()
         self.batch_size = batch_size
